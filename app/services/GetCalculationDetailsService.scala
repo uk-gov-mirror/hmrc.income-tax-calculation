@@ -44,7 +44,7 @@ class GetCalculationDetailsService @Inject()(calculationDetailsConnectorLegacy: 
                                              val appConfig: AppConfig)(implicit ec: ExecutionContext) extends Logging {
 
   private val taxYear2024: Int = TaxYear.taxYear2024
-  
+
   def getCalculationListResponse(nino: String, taxYear: String)(implicit hc: HeaderCarrier): CalculationResult[CalculationListResponseModel] = {
     getCalculationList(nino, Some(taxYear)).map {
       calculationList => CalculationListResponseModel(calculationList.map(_.updateCalcTypeAndCrystallisedIfReq()))
@@ -69,22 +69,23 @@ class GetCalculationDetailsService @Inject()(calculationDetailsConnectorLegacy: 
                          taxYearOption: Option[String],
                          calculationRecord: Option[String] = None
                         )(implicit hc: HeaderCarrier): CalculationResult[Seq[GetCalculationListModel]] = EitherT {
+    val yearOpt = taxYearOption.flatMap(_.toIntOption)
 
-    taxYearOption match {
-      case Some(taxYear) if taxYear.toInt >= taxYear2024 =>
-        taxYear.toInt match {
-            case year if year >= TaxYear.taxYear2026 =>
-              logger.info(s"[CalculationDetailController][getCalculationDetails] - Tax year: $taxYear, calling getCalculationList2083")
-              listCalculationDetailsConnector.getCalculationList2083(nino, taxYear)
-            case _ if calculationRecord.isDefined =>
-              logger.info(s"[CalculationDetailController][getCalculationDetails] - Tax year: $taxYear, calling getCalculationList2150")
-              listCalculationDetailsConnector.getCalculationList2150(nino, taxYear)
-            case _ =>
-              logger.info(s"[CalculationDetailController][getCalculationDetails] - Tax year: $taxYear, calling getCalculationList5624")
-              hipGetCalculationListConnector.getCalculationList5624(nino, taxYear)
-          }
+    yearOpt match {
+      case Some(year) if year >= TaxYear.taxYear2026 =>
+        val taxYear = year.toString
+        logger.info(s"[GetCalculationDetailsService][getCalculationList] taxYear=$taxYear route=2083")
+        listCalculationDetailsConnector.getCalculationList2083(nino, taxYear)
+      case Some(year) if year >= taxYear2024 && calculationRecord.isDefined =>
+        val taxYear = year.toString
+        logger.info(s"[GetCalculationDetailsService][getCalculationList] taxYear=$taxYear route=2150")
+        listCalculationDetailsConnector.getCalculationList2150(nino, taxYear)
+      case Some(year) if year >= taxYear2024 =>
+        val taxYear = year.toString
+        logger.info(s"[GetCalculationDetailsService][getCalculationList] taxYear=$taxYear route=5624")
+        hipGetCalculationListConnector.getCalculationList5624(nino, taxYear)
       case _ =>
-        logger.info(s"[GetCalculationDetailsService][calcListHipLegacyConnector]")
+        logger.info(s"[GetCalculationDetailsService][getCalculationList] taxYear=$taxYearOption route=legacy")
         calcListHipLegacyConnector.calcList(nino, taxYearOption)
     }
   }
